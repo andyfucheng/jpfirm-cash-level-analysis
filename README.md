@@ -1,5 +1,6 @@
 # jpfirm-cash-level-analysis 
-## Co-workers: Leslie Lee and Nicholas Narmada
+*Co-workers: Leslie Lee and Nicholas Narmada*
+
 The purpose of this project is to apply statistical learning to make a decision about the level of corporate 
 cash holdings and to decide whether the company should pay a dividend (payout decision). To construct the analysis, 
 here we use a dataset of listed Japanese corporations between 2011 and 2019.
@@ -73,16 +74,78 @@ Statistical learning can be used to predict levels of excess cash to determine i
 
 In japanese, corporations, the Keiretsu system can help mitigate the information asymmetry by reducing risk by sharing it across large and small corporations. Agency costs increase when interests of shareholders are different from interest of the debtholders, which may cause serious financial strain. With active participation of the monopolistic Japanese banks and cross owernship within corporations, agency costs can be lowered so Japanses firms do not need to have as much cash as US firms. Data in previous models such as the free cash flow model and tradeoff mdoel can be used to determine how firms should utilize their excess cash and minimize financial distress.
 ## Cash Holdings Decision
+This project uses both Generalized Linear Model (GLM) and Linear Model (LM) to test the significance of each previous predictors in affecting corporation's cash holding level.
 ### Gnerealized Linear Model (GLM) 
-
+To calculate for the model fit using GLM, we use *glm()* function from the *stats* library.
+```
+#Generalized linear model
+glm.fits = glm(cashat~lnat+capat+leverage+comage+lnsales+ebitdaat, data=dfjpcorp)
+summary(glm.fits)
+```
+Based on the result, the best generalized linear model suited for this case is the Guassian model.
 ### Linear Model (LM)
-
+We use the *lm()* function which is also from *stats* library to calculate for the model fit of LM.
+```
+lm.fit = lm(cashat~lnat+capat+leverage+comage+lnsales+ebitdaat, data=dfjpcorp)
+summary(lm.fit)
+```
+Based on the result, we can tell that all six predictors are statistically significant at the 0.0001% confidence level in affecting the cash holding level. Each of the independent variables' t-value is large enough which results in a small p-value. Thus, we can reject the null hypothesis of all predictors that there is no relationship between the predictors and the level of cash holding.The nature of the LM model allows for a low residual standard error (0.1253), and the R-squared statistic which equals to 0.4132 is definitely high enough. Thus, the accuracy of the model would be good enough to suggest the significance of predictors.
+Among the independent variables, we can observe that capital expenditure *capat* has the greatest negative effect on cash holdings, where one unit increase in capat results in 0.634134 decrease in cash holding level. While in the other case, EBITDA *ebitdaat* has the greatest positive effect on cash holding where one unit increase in *ebitdaat* results in a 0.467623 increase in cash holding level.
 ## Dividend Payout Decision
 ### Logistic Model
+First of all, to estimate the relationship between dividend payout decisions based on the predictors, we implement the same *glm()* function from *stats*, but set the *family* attribute as "binomial. According to the result, we can state that the correlation of all predictors are statistically significant at 0.0001%. Furthermore, among all the variables, we can observe a negative correlation between *leverage* and dividend payout decision while the rest of five obtain positive correlation. As for the economic siginificance from this logistic model, we can say that capital expenditure *capat* has the greatest positive impact as one unit increase lead to 3.75338 units rise in TRUE in *dividend*. 
+```
+#logistic model
+glm.fits_bi= glm(dividend~lnat+capat+leverage+comage+lnsales+ebitdaat, data=dfjpcorp, family=binomial)
+summary(glm.fits_bi)
+glm.prob = predict(glm.fits_bi,  type ="response")
+glm.prob[1:5]
 
+contrasts(dfjpcorp$dividend)
+
+# convert predicted probabilty into class labels
+# note that we have 24851 rows
+glm.pred=rep("FALSE",24851)
+glm.pred[glm.prob>.5]="TRUE"
+```
 ### Latent Dirichlet Allocation (LDA)
+In the LDA model, we define firms whose *totaldividend>0* belong to TRUE in *dividend* while the negative side belongs to FALSE in *dividend*. In the whole dataset, there are 84.85% of firms did not pay the dividend while only 15.15% firms pay. Under this condition, except *leverage* which has a negative impact of -3.1508 change in TRUE in *dividend*, each unit increase of the rest of predictors change *dividend* positively. In the case that firms' *divident* is TRUE, the accuracy rate of logistic model is 87.88% which is slightly higher than 87.64% is LDA model. Here you can replace the threshold of *dividend* as you want to check if the accuracy rate changes responsively.
+```
+#LDA regression
+library(MASS)
 
-<!-- prediction accuracy comparison -->
+lda.fit=lda(dividend~lnat+capat+leverage+comage+lnsales+ebitdaat, data=dfjpcorp)
+lda.fit
+lda.prob = predict(lda.fit, type="response")
+lda.prob.class=lda.prob$class
 
+contrasts(dfjpcorp$dividend)
+```
+We also divide the whole dataset into training and test dataset based on year 2016 and create the confusion tables to compare the accuracy rate. According to the results, we learnt that the logistic model has a slightly higer accuracy rate of 88.52% in comparison of 88.50% in LDA model. Besides, in both models, a higher prediciton accuracy rate in TRUE than in FALSE is observed.
+```
+training = (dfjpcorp$year < 2016)
+dfjpcorp.2016 = dfjpcorp[!training,]
+Dividend.2016 = dfjpcorp$dividend[!training]
+
+#logistic model.2016
+glm.fits_bi= glm(dividend~lnat+capat+leverage+comage+lnsales+ebitdaat, data=dfjpcorp, family=binomial, subset = training)
+glm.prob = predict(glm.fits_bi, dfjpcorp.2016, type ="response")
+glm.pred = rep("FALSE",11716 )
+glm.pred[glm.prob>.5]="TRUE"
+table(glm.pred, Dividend.2016)
+mean(glm.pred == Dividend.2016)
+mean(glm.pred != Dividend.2016)
+
+#LDA.2016 regression
+lda.fits=lda(dividend~lnat+capat+leverage+comage+lnsales+ebitdaat,data=dfjpcorp,subset=training)
+lda.fits
+lda.prob = predict(lda.fits, dfjpcorp.2016, type ="response")
+lda.pred = lda.prob$class
+#lda.pred = rep("FALSE",11716 )
+#lda.pred[lda.posterior>.5]="TRUE"
+table(lda.pred, Dividend.2016)
+mean(lda.pred == Dividend.2016)
+mean(lda.pred != Dividend.2016)
+```
 ## Non-linear Association of Company Age
-### cross-validation approach -- LOOC and 10-Fold Cross-Validation
+When running the cross validation, we use 10 different samples to make sure we have a better accuracy in assessing which order of *age* gives the lowest MSE. However, since the Leave One Out Cross Validation (LOOCV) is very time consuming, we only run it for the cash holding model. You can view the detailed code for the cross validation starts from line 193 to 476 at the attached R file.
